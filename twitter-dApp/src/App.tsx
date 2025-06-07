@@ -6,7 +6,7 @@ import { IoMdHeart, IoMdHeartEmpty } from "react-icons/io";
 import ProfileCreation from "./components/ProfileCreation";
 
 const contractAddress = "0x6e17c0d8A1bF7A1cf7f39d6bb3dcE993Efa85C4f";
-const profileContractAddress = "0x74C877e2fAb46aC42f22d8287105180fB3CBDb41"; 
+const profileContractAddress = "0x74C877e2fAb46aC42f22d8287105180fB3CBDb41";
 
 declare global {
   interface Window {
@@ -22,22 +22,27 @@ interface Tweet {
   likes: number;
 }
 
+interface Profile {
+  displayName: string;
+  bio: string;
+}
+
 function App() {
   const [account, setAccount] = useState<string | null>(null);
   const [web3, setWeb3] = useState<Web3 | null>(null);
   const [contract, setContract] = useState<any>(null);
   const [profileContract, setProfileContract] = useState<any>(null);
-  const [profileExists, setProfileExists] = useState<boolean | null>(null);
-  const [walletConnected,setWalletConnected]=useState<boolean>(false)
-
+  const [profileExists, setProfileExists] = useState<boolean>(false);
+  const [walletConnected, setWalletConnected] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
   const [tweetContent, setTweetContent] = useState("");
   const [tweets, setTweets] = useState<Tweet[]>([]);
 
   const fetchTweets = async () => {
     if (!contract || !account) return;
     try {
-      const rawTweets = await contract.methods.getTweets(account).call();
-      const mappedTweets = rawTweets.map((tweet: any) => ({
+      const rawTweets: any[] = await contract.methods.getTweets(account).call();
+      const mappedTweets: Tweet[] = rawTweets.map((tweet) => ({
         author: tweet[0],
         id: parseInt(tweet[1]),
         content: tweet[2],
@@ -46,35 +51,38 @@ function App() {
       }));
       setTweets(mappedTweets);
     } catch (err) {
-      console.error('Error fetching tweets:', err);
+      console.error("Error fetching tweets:", err);
     }
   };
 
-  const getProfile = async (): Promise<boolean> => {
-    if (!web3 || !profileContract || !account) return false;
+  const getProfile = async (): Promise<Profile | null> => {
+    if (!web3 || !profileContract || !account) return null;
     try {
-      const profile = await profileContract.methods.getProfile(account).call();
-      return profile.displayName !== "";
+      const profile: Profile = await profileContract.methods.getProfile(account).call();
+      return profile;
     } catch (error) {
-      console.error("Error checking profile existence:", error);
-      return false;
+      console.error("Error fetching profile:", error);
+      return null;
     }
   };
 
   const checkProfile = async () => {
-    const exists = await getProfile();
-    setProfileExists(exists);
+    const profile = await getProfile();
+    setProfileExists(profile !== null && profile.displayName !== "");
   };
 
   const handleTweetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tweetContent.trim() || !contract || !account) return;
     try {
+      setLoading(true);
       await contract.methods.createTweet(tweetContent).send({ from: account });
       setTweetContent("");
       await fetchTweets();
     } catch (error) {
       console.error("Error sending tweet:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -85,9 +93,7 @@ function App() {
           method: "eth_requestAccounts",
         });
         setAccount(accounts[0]);
-        if (contract) {
-          await fetchTweets();
-        }
+        await fetchTweets();
         await checkProfile();
       } catch (err) {
         console.error("Wallet connect error:", err);
@@ -100,33 +106,65 @@ function App() {
       await contract.methods.addLikeToTweet(id, author).send({ from: account });
       fetchTweets();
     } catch (err) {
-      console.error('Error liking tweet:', err);
+      console.error("Error liking tweet:", err);
     }
   };
 
-
   const formatTimestamp = (timestamp: number | bigint | string) => {
-    const time = typeof timestamp === 'bigint' ? Number(timestamp) : +timestamp;
+    const time = typeof timestamp === "bigint" ? Number(timestamp) : +timestamp;
     return new Date(time * 1000).toLocaleString();
   };
 
   useEffect(() => {
-    if (window.ethereum) {
-      const web3Instance = new Web3(window.ethereum);
-      setWeb3(web3Instance);
+    const init = async () => {
+      if (window.ethereum) {
+        const web3Instance = new Web3(window.ethereum);
+        setWeb3(web3Instance);
 
-      const twitterInstance = new web3Instance.eth.Contract(
-        contractABI as any,
-        contractAddress
-      );
-      const profileInstance = new web3Instance.eth.Contract(
-        profileABI as any,
-        profileContractAddress
-      );
+        const twitterInstance = new web3Instance.eth.Contract(
+          contractABI as any,
+          contractAddress
+        );
+        const profileInstance = new web3Instance.eth.Contract(
+          profileABI as any,
+          profileContractAddress
+        );
 
-      setContract(twitterInstance);
-      setProfileContract(profileInstance);
-    }
+        setContract(twitterInstance);
+        setProfileContract(profileInstance);
+
+        const accounts = await window.ethereum.request({
+          method: "eth_accounts",
+        });
+
+        if (accounts.length > 0) {
+          const connectedAccount = accounts[0];
+          setAccount(connectedAccount);
+
+          const profile: Profile = await profileInstance.methods
+            .getProfile(connectedAccount)
+            .call();
+
+          setProfileExists(profile?.displayName !== "");
+
+          const rawTweets: any[] = await twitterInstance.methods
+            .getTweets(connectedAccount)
+            .call();
+
+          const mappedTweets: Tweet[] = rawTweets.map((tweet) => ({
+            author: tweet[0],
+            id: parseInt(tweet[1]),
+            content: tweet[2],
+            timestamp: parseInt(tweet[3]),
+            likes: parseInt(tweet[4]),
+          }));
+
+          setTweets(mappedTweets);
+        }
+      }
+    };
+
+    init();
   }, []);
 
   return (
@@ -158,7 +196,9 @@ function App() {
               onChange={(e) => setTweetContent(e.target.value)}
             ></textarea>
             <br />
-            <button type="submit">Tweet</button>
+            <button type="submit">
+                {loading ? <div className="spinner"></div> : <>Tweet</>}
+            </button>
           </form>
 
           <div>
