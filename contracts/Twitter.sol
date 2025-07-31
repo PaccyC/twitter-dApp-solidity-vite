@@ -15,8 +15,6 @@ interface IProfile {
 contract Twitter is Ownable{
 
     uint16   maxTweetLength =300;
-
-
     struct Tweet {
         address author;
         uint256 id;
