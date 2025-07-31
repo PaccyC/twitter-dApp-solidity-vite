@@ -33,7 +33,6 @@ function App() {
   const [contract, setContract] = useState<any>(null);
   const [profileContract, setProfileContract] = useState<any>(null);
   const [profileExists, setProfileExists] = useState<boolean>(false);
-  const [walletConnected, setWalletConnected] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [tweetContent, setTweetContent] = useState("");
   const [tweets, setTweets] = useState<Tweet[]>([]);
