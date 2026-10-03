@@ -17,12 +17,3 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-config.bat
-temp_auto_push.bat
-temp_interactive_push.bat
-branch_structure.json
